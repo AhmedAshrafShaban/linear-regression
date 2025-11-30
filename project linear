@@ -1,0 +1,307 @@
+;1------------------------------
+.MODEL SMALL
+.STACK 100H
+.DATA
+    x_values DW 10 DUP(?)
+    y_values DW 10 DUP(?)
+    n       DW 0
+
+    sum_x   DW 0
+    sum_y   DW 0
+    sum_xy  DW 0
+    sum_xx  DW 0
+    slope   DW 0
+    intercept DW 0
+
+    msg_n       DB 0DH, 0AH, 'Enter number of points (1-10): $'
+    msg_x       DB 0DH, 0AH, 'Enter x for point $'
+    msg_y     DB 0DH, 0AH, 'Enter y for point $'
+    msg_colon   DB ': $'
+    msg_heading DB 0DH, 0AH, 'Data Points:', 0DH, 0AH, '$'
+    msg_slope   DB 0DH, 0AH, 'Slope (m): $'
+    msg_intercept DB 0DH, 0AH, 'Intercept (b): $'
+    
+    msg_equation DB 0DH, 0AH, 'Regression equation: y = $'
+    msg_x_display DB 'x + $'
+    input_buffer DB 12, ?, 12 DUP('$')
+    newline     DB 0DH, 0AH, '$'
+.CODE
+;2-----------------------------------------------------------
+MAIN PROC 
+     MOV AX, SEG x_values
+    MOV DS, AX
+    
+
+    CALL GET_NUMBER_OF_POINTS
+    CALL GET_DATA_POINTS
+    CALL DISPLAY_DATA_POINTS
+    CALL CALCULATE_REGRESSION
+    CALL DISPLAY_RESULTS
+
+    MOV AH, 4CH
+    INT 21H
+MAIN ENDP
+
+; 3-----------------------------
+GET_NUMBER_OF_POINTS PROC
+    LEA DX, msg_n
+    MOV AH, 09H
+    INT 21H
+
+    CALL READ_NUMBER
+    CMP AX, 1
+    JB  GET_NUMBER_OF_POINTS
+    CMP AX, 10
+    JA  GET_NUMBER_OF_POINTS
+    MOV n, AX
+    RET
+GET_NUMBER_OF_POINTS ENDP
+
+;4-----------------------------
+GET_DATA_POINTS PROC
+    MOV DI, 1        ; point counter
+    MOV SI, 0        ; array index
+
+READ_POINTS:
+    ; ---- Read X
+    LEA DX, msg_x
+    MOV AH, 09H
+    INT 21H
+
+    MOV AX, DI
+    CALL PRINT_NUMBER
+
+    LEA DX, msg_colon
+    MOV AH, 09H
+    INT 21H
+
+    CALL READ_NUMBER
+    MOV [x_values+SI], AX
+
+    ; ---- Read Y
+    LEA DX, msg_y
+    MOV AH, 09H
+    INT 21H
+
+    MOV AX, DI
+    CALL PRINT_NUMBER
+
+    LEA DX, msg_colon
+    MOV AH, 09H
+    INT 21H
+
+    CALL READ_NUMBER
+    MOV [y_values+SI], AX
+
+    ADD SI, 2
+    INC DI
+    MOV AX, DI
+    CMP AX, n
+    JLE READ_POINTS
+    
+    LEA DX, newline
+    MOV AH, 09H
+    INT 21H
+    RET
+GET_DATA_POINTS ENDP
+
+; 5-----------------------------
+DISPLAY_DATA_POINTS PROC
+    LEA DX, msg_heading
+    MOV AH, 09H
+    INT 21H
+
+    MOV CX, n
+    MOV SI, 0
+
+DISPLAY_LOOP:
+    MOV AX, [x_values+SI]
+    CALL PRINT_NUMBER
+    
+    MOV DL, ' '
+    MOV AH, 02H
+    INT 21H
+    
+    MOV AX, [y_values+SI]
+    CALL PRINT_NUMBER
+    
+    LEA DX, newline
+    MOV AH, 09H
+    INT 21H
+
+    ADD SI, 2
+    LOOP DISPLAY_LOOP
+    RET
+DISPLAY_DATA_POINTS ENDP
+
+;6-----------------------------
+CALCULATE_REGRESSION PROC
+    MOV sum_x, 0
+    MOV sum_y, 0
+    MOV sum_xy, 0
+    MOV sum_xx, 0
+
+    MOV CX, n
+    MOV SI, 0
+CALC_LOOP:
+    MOV AX, [x_values+SI]
+    MOV BX, [y_values+SI]
+
+    ADD sum_x, AX
+    ADD sum_y, BX
+
+    IMUL BX
+    ADD sum_xy, AX
+
+    MOV AX, [x_values+SI]
+    IMUL AX
+    ADD sum_xx, AX
+
+    ADD SI, 2
+    LOOP CALC_LOOP
+
+    ; slope m = (n*sum_xy - sum_x*sum_y)/(n*sum_xx - sum_x*sum_x)
+    MOV AX, n
+    IMUL sum_xy
+    MOV BX, AX
+    MOV AX, sum_x
+    IMUL sum_y
+    SUB BX, AX
+    MOV AX, BX
+    MOV slope, AX
+
+    ; intercept b = (sum_y - m*sum_x)/n
+    MOV AX, slope
+    IMUL sum_x
+    MOV BX, sum_y
+    SUB BX, AX
+    MOV AX, BX
+    CWD
+    IDIV n
+    MOV intercept, AX
+
+    RET
+CALCULATE_REGRESSION ENDP
+
+;7-----------------------------
+DISPLAY_RESULTS PROC
+    LEA DX, msg_slope
+    MOV AH, 09H
+    INT 21H
+    MOV AX, slope
+    CALL PRINT_NUMBER
+
+    LEA DX, msg_intercept
+    MOV AH, 09H
+    INT 21H
+    MOV AX, intercept
+    CALL PRINT_NUMBER
+
+    LEA DX, msg_equation
+    MOV AH, 09H
+    INT 21H
+    MOV AX, slope
+    CALL PRINT_NUMBER
+    LEA DX, msg_x_display
+    MOV AH, 09H
+    INT 21H
+    MOV AX, intercept
+    CALL PRINT_NUMBER
+    
+    LEA DX, newline
+    MOV AH, 09H
+    INT 21H
+
+    RET
+DISPLAY_RESULTS ENDP
+
+;8==============================
+PRINT_NUMBER PROC
+    PUSH AX
+    PUSH BX
+    PUSH CX
+    PUSH DX
+
+    TEST AX, AX
+    JNS POSITIVE
+    NEG AX
+    PUSH AX
+    MOV DL, '-'
+    MOV AH, 02H
+    INT 21H
+    POP AX
+
+POSITIVE:
+    MOV CX, 0
+    MOV BX, 10
+DIV_LOOP:
+    MOV DX, 0
+    DIV BX
+    PUSH DX
+    INC CX
+    TEST AX, AX
+    JNZ DIV_LOOP
+
+PRINT_LOOP:
+    POP DX
+    ADD DL, '0'
+    MOV AH, 02H
+    INT 21H
+    LOOP PRINT_LOOP
+
+    POP DX
+    POP CX
+    POP BX
+    POP AX
+    RET
+PRINT_NUMBER ENDP
+
+;9==============================
+READ_NUMBER PROC
+    PUSH BX
+    PUSH CX
+    PUSH DX
+    PUSH SI
+
+    LEA DX, input_buffer
+    MOV AH, 0AH
+    INT 21H
+
+    LEA SI, input_buffer+2
+    MOV AX, 0
+    MOV BX, 10
+    MOV CL, [input_buffer+1]
+
+    MOV CH, 0
+    CMP BYTE PTR [SI], '-'
+    JNE CONVERT_LOOP
+    INC SI
+    DEC CL
+
+CONVERT_LOOP:
+    CMP CL, 0
+    JE CONVERT_DONE
+    MOV DX, 0
+    MUL BX
+    MOV DL, [SI]
+    SUB DL, '0'
+    MOV DH, 0
+    ADD AX, DX
+    INC SI
+    DEC CL
+    JMP CONVERT_LOOP
+
+CONVERT_DONE:
+    CMP BYTE PTR [input_buffer+2], '-'
+    JNE READ_DONE
+    NEG AX
+
+READ_DONE:
+    POP SI
+    POP DX
+    POP CX
+    POP BX
+    RET
+READ_NUMBER ENDP
+
+END MAIN
