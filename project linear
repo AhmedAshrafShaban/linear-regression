@@ -1,6 +1,3 @@
-; Linear Regression Calculator in x86 Assembly (DOS)
-; Fixed: Proper slope and intercept calculation with division.
-; Optimized: Removed unnecessary code, streamlined loops, reduced size.
 
 .MODEL SMALL
 .STACK 100H
